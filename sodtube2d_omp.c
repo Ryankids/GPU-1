@@ -101,7 +101,24 @@ void Init()
 			float d =0;
 			float cx = dx*(i+0.5);
 			float cy = dy*(j+0.5);
-			if (i > 0.1*NX)
+			d = (cx - 0.5)*(cx - 0.5) + (cy-0.5)* (cy-0.5);
+			if(d <= 0.5*L)
+			{
+				//Initialize the right side gas condition
+				dens[i + j*NX] = 10.0;
+				xv[i + j*NX] = 0.0;
+				yv[i + j*NX] = 0.0;
+				press[i + j*NX] = 1.0;
+			}
+			else
+			{
+				dens[i + j*NX] = 1.0;
+				xv[i + j*NX] = 0.0;
+				yv[i + j*NX] = 0.0;
+				press[i + j*NX] = 1.0;
+				
+			}
+			/*if (i > 0.1*NX)
 			{
 				//Initialize the right side gas condition
 				dens[i + j*NX] = 3.81;
@@ -126,7 +143,7 @@ void Init()
 				yv[i + j*NX] = 0.0;
 				press[i + j*NX] = 1.0;
 				
-			}
+			}*/
 			U[i + j*NX][0] = dens[i + j*NX];
 			U[i + j*NX][1] = dens[i + j*NX] * (xv[i + j*NX]);
 			U[i + j*NX][2] = dens[i + j*NX] * (yv[i + j*NX]);
