@@ -11,7 +11,7 @@
 #define NY 100            // Number of cells in Y direction
 #define N  NX*NY          // Number of total cells
 #define L 1.0             // Dimensionless length of surface
-#define W 1.0             // Dimensionless width of surface
+#define W 0.5             // Dimensionless width of surface
 #define dx (L/NX)         // Lenth of cell
 #define dy (W/NY)         // Width of cell
 #define dt 0.01*0.02      // Size of time step
@@ -103,22 +103,36 @@ void Allocate_Memory() {
 void Init() {
 	int i, j;
 	for (j = 0; j < NY; j++) {
-		for (i = 0; i < NX; i++) {	
+		for (i = 0; i < NX; i++) {
+			
+			float d =0;
 			float cx = dx*(i+0.5);
 			float cy = dy*(j+0.5);
-			float d = (cx-0.5)*(cx-0.5) + (cy-0.5)*(cy-0.5);
-			if (d <= 0.01) {
-				//Initialize the gas condition in the bubble
-				dens[i+j*NX] = 10.0;
-				xv[i+j*NX] = 0.0;
-				yv[i+j*NX] = 0.0;
-				press[i+j*NX] = 10.0;
-			} else {				
-				//Initialize the gas condition outside the bubble
-				dens[i+j*NX] = 1.0;
-				xv[i+j*NX] = 0.0;
-				yv[i+j*NX] = 0.0;
-				press[i+j*NX] = 1.0;	
+			if (i > 0.1*NX)
+			{
+				//Initialize the right side gas condition
+				dens[i + j*NX] = 3.81;
+				xv[i + j*NX] = 0.0;
+				yv[i + j*NX] = 0.0;
+				press[i + j*NX] = 10.0;
+			}
+			else{
+				d = (cx - 0.3)*(cx - 0.3) + cy* cy;
+			 	if(d <= 0.2*L)
+				{
+				//Initialize the left side gas condition
+					dens[i + j*NX] = 0.1;
+					xv[i + j*NX] = 0.0;
+					yv[i + j*NX] = 0.0;
+					press[i + j*NX] = 10.0;
+					break;
+				}
+				//Initialize the left side gas condition
+				dens[i + j*NX] = 1.0;
+				xv[i + j*NX] = 0.0;
+				yv[i + j*NX] = 0.0;
+				press[i + j*NX] = 1.0;
+				
 			}
 			U[i+j*NX][0] = dens[i+j*NX];
 			U[i+j*NX][1] = dens[i+j*NX] * (xv[i+j*NX]);
