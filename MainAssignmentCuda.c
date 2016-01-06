@@ -171,11 +171,12 @@ void Init(){
 				}
 				else
 				{
-					dens[i + j*NX + k*NX*NY] = 0.0;
-					xv[i + j*NX + k*NX*NY] = 0.0;
-					yv[i + j*NX + k*NX*NY] = 0.0;
+                                        dens[i + j*NX + k*NX*NY] = 0.0;
+                                        xv[i + j*NX + k*NX*NY] = 0.0;
+                                        yv[i + j*NX + k*NX*NY] = 0.0;
                                         zv[i + j*NX + k*NX*NY] = 0.0;
-					press[i + j*NX + k*NX*NY] = 0.0;
+                                        press[i + j*NX + k*NX*NY] = 0.001;
+                                        temprature[i + j*NX + k*NX*NY] = -45;
 				}
 			}
 		}
@@ -243,6 +244,79 @@ void CPUHeatContactFunction(){
 	}
 	#pragma omp barrier
 }
+void CalRenewResult(){
+	int i, j, k, z;
+	// Update U by FVM
+	#pragma omp for collapse(2)
+        for (k = 1; k < (NZ - 1); k++) {
+		for (j = 1; j < (NY - 1); j++) {
+			for (i = 1; i < (NX - 1); i++) {
+                        	for (z = 0; z < 5; z++) {
+			U_new[i+j*NX + k*NX*NY +z*N] = U[i+j*NX + k*NX*NY +z*N] - (dt/dx)*(FR[i+j*NX + k*NX*NY +z*N] - FL[i+j*NX + k*NX*NY +z*N])
+				- (dt/dy)*(FF[i+j*NX + k*NX*NY +z*N] - FB[i+j*NX + k*NX*NY +z*N]) 
+				- (dt/dz)*(FU[i+j*NX + k*NX*NY +z*N] - FD[i+j*NX + k*NX*NY +z*N]);
+				}
+			}
+		}
+	}
+	#pragma omp barrier
+
+	//Renew left and right boundary condition
+	#pragma omp for
+	for (i = 1; i < (NX - 1); i++) {
+        	for (k = 1; k < (NZ - 1); k++) {
+                	for (z = 0; z < 5; z++) {
+		U_new[i + k*NX*NY + z*N] = U_new[i + NX + k*NX*NY + z*N];
+		U_new[i + (NY-1)*NX + k*NX*NY + z*N] = U_new[i + (NY-2)*NX + k*NX*NY + z*N];
+			}
+		}
+	}
+	#pragma omp barrier
+
+	//Renew back and front boundary condition
+	#pragma omp for
+	for (j = 0; j < NY; j++) {
+                for (k = 1; k < (NZ - 1); k++) {
+                        for (z = 0; z < 5; z++) {
+		U_new[j*NX + k*NX*NY + z*N] = U_new[1 + j*NX + k*NX*NY + z*N];
+		U_new[(NX-1)+j*NX + k*NX*NY + z*N] = U_new[(NX-2)+j*NX + k*NX*NY + z*N];
+			}
+		}
+	}
+	#pragma omp barrier
+	//Renew top and down boundary condition
+        #pragma omp for
+        for (i = 0; i < NX; i++) {
+	        for (j = 0; j < NY; j++) {
+	                for (z = 0; z < 5; z++) {
+                U_new[i + j*NX + (NZ-1)*NX*NY + z*N] = U_new[i + j*NX + (NZ-2)*NX*NY + z*N];
+                U_new[i + j*NX + z*N] = U_new[i +j*NX + NX*NY + z*N];
+			}
+		}
+        }
+        #pragma omp barrier
+
+	// Update density, velocity, pressure, and U
+	#pragma omp for collapse(2)
+        for (k = 0; k < NZ; k++) {
+		for (j = 0; j < NY; j++) {
+			for (i = 0; i < NX; i++) {	
+				dens[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 0*N];
+				xv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 1*N] / U_new[i + j*NX + k*NX*NY + 0*N];
+				yv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 2*N] / U_new[i + j*NX + k*NX*NY + 0*N];
+                                zv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 3*N] / U_new[i + j*NX + k*NX*NY + 0*N];
+				press[i+j*NX + k*NX*NY] = (GAMA-1) * (U_new[i+j*NX + k*NX*NY + 3*N] - 0.5 * dens[i+j*NX + k*NX*NY] * (xv[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY] + yv[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY] +  zv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY]));
+				U[i+j*NX + k*NX*NY + 0*N] = U_new[i+j*NX + k*NX*NY + 0*N];
+				U[i+j*NX + k*NX*NY + 1*N] = U_new[i+j*NX + k*NX*NY + 1*N];
+				U[i+j*NX + k*NX*NY + 2*N] = U_new[i+j*NX + k*NX*NY + 2*N];
+				U[i+j*NX + k*NX*NY + 3*N] = U_new[i+j*NX + k*NX*NY + 3*N];
+				U[i+j*NX + k*NX*NY + 4*N] = U_new[i+j*NX + k*NX*NY + 4*N];
+			}
+		}
+	}
+	#pragma omp barrier
+
+}
 void Call_GPUHeatContactFunction(){
         int threadsPerBlock = 256;
         int blocksPerGrid = (N + threadsPerBlock -1) / threadsPerBlock;
@@ -290,6 +364,18 @@ void Free_Memory() {
         if (zv) free(zv);
         if (press) free(press);
 	if (h_body) free(h_body);
+        
+        if (U) free(U);
+        if (U_new) free(U_new);
+        if (FF) free(FF);
+        if (FB) free(FB);
+        if (FU) free(FU);
+        if (FD) free(FD);
+        if (FL) free(FL);
+        if (FR) free(FR);
+        if (E) free(E);
+        if (F) free(F);
+        if (W) free(W);
         
 	if (d_dens) cudaFree(d_dens);
         if (d_temprature) cudafree(d_temprature);
