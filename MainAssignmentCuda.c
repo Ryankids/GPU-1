@@ -16,10 +16,13 @@
 #define PHI_X (DT*ALPHA/(DX*DX))  // CFL in x, y and z respectively.
 #define PHI_Y (DT*ALPHA/(DY*DY))
 #define PHI_Z (DT*ALPHA/(DZ*DZ))
-#define Travelheight
-#define Travelspeed
 #define Timestep
 
+
+#define R (1.0)           // Dimensionless specific gas constant
+#define GAMA (7.0/5.0)    // Ratio of specific heats
+#define CV (R/(GAMA-1.0)) // Cv
+#define CP (CV + R)       // Cp
 
 float *dens;              //density
 float *temprature;        //temprature
@@ -52,6 +55,9 @@ int *h_body;
 int *d_body;
 
 int total_cells = 0;            // A counter for computed cells
+
+
+FILE *OutputResult;
 
 __global__ void GPUTimeStepFunction(float *a, float *b, int *body);
 __global__ void GPUHeatContactFunction(float *a, float *b, int *body);
@@ -124,31 +130,7 @@ void Allocate_Memory() {
         printf("CUDA error (malloc d_body) = %s\n",cudaGetErrorString(Error));
 }
 void LoadFile(){
-        FILE *pFile;
-        pFile = fopen( "X-37_Coarse.STL", "r" );
-        if ( NULL == pFile )
-        {
-                printf( "Open failure" );
-        }
-        else
-        {
-		char c1[20],c2[20];
-		float f1,f2,f3;
-                fscanf( pFile,"%s%s\n", c1,c2);
-                fscanf( pFile,"%s", c1);
-                while(fgets(c1, sizeof(c1), pFile))
-		{
-                        fscanf( pFile,"%s%f%f%f\n", c1,&f1,&f2,&f3);
-                        fscanf( pFile,"%s%s\n", c1,c2);
-                        fscanf( pFile,"%s%f%f%f\n", c1,&f1,&f2,&f3);
-                        fscanf( pFile,"%s%f%f%f\n", c1,&f1,&f2,&f3);
-                        fscanf( pFile,"%s%f%f%f\n", c1,&f1,&f2,&f3);
-                        fscanf( pFile,"%s\n", c1);
-                        fscanf( pFile,"%s\n", c1);
-                        fscanf( pFile,"%s", c1);
-                }
-                fclose(pFile);
-        }
+	
 }
 void Init(){
 	int i, j, k;
@@ -169,52 +151,71 @@ void Init(){
 				}
 				else
 				{
-					dens[i + j*NX + k*NX*NY] = 0.0;
-					xv[i + j*NX + k*NX*NY] = 0.0;
+					dens[i + j*NX + k*NX*NY] = 0.01;
+					xv[i + j*NX + k*NX*NY] = 5362;
 					yv[i + j*NX + k*NX*NY] = 0.0;
-                                        zv[i + j*NX + k*NX*NY] = 0.0;
-					press[i + j*NX + k*NX*NY] = 0.001;
+                                        zv[i + j*NX + k*NX*NY] = 4450;
+					press[i + j*NX + k*NX*NY] = 0.0001;
                                         temprature[i + j*NX + k*NX*NY] = -45;
 				}
 			}
 		}
 	}
 
-        U[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY];
-        U[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX + k*NX*NY] * (xv[i+j*NX + k*NX*NY]);
-        U[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY] * (yv[i+j*NX + k*NX*NY]);
-        U[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY] * (zv[i+j*NX + k*NX*NY]);
-        U[i+j*NX + k*NX*NY +4*N] = dens[i+j*NX + k*NX*NY] * (CV*(press[i+j*NX + k*NX*NY]/dens[i+j*NX + k*NX*NY]/R)
-                + 0.5*((xv[i+j*NX + k*NX*NY] * xv[i+j*NX + k*NX*NY]) + (yv[i+j*NX + k*NX*NY] * yv[i+j*NX + k*NX*NY]) 
-		+ (zv[i+j*NX + k*NX*NY] * zv[i+j*NX + k*NX*NY])));
+	for(i = 0;i < NX; i++)
+	{
+		for(j = 0; j < NY; j++)
+		{
+			for(k = 0;k < NZ; k++)
+			{
+				U[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY];
+        			U[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX + k*NX*NY] * (xv[i+j*NX + k*NX*NY]);
+        			U[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY] * (yv[i+j*NX + k*NX*NY]);
+        			U[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY] * (zv[i+j*NX + k*NX*NY]);
+				if(h_body[i + j*NX + k*NX*NY] == 0)
+				{
+        				U[i+j*NX + k*NX*NY +4*N] = dens[i+j*NX + k*NX*NY] * (CV*(press[i+j*NX + k*NX*NY]/dens[i+j*NX + k*NX*NY]/R)
+                				+ 0.5*((xv[i+j*NX + k*NX*NY] * xv[i+j*NX + k*NX*NY]) + (yv[i+j*NX + k*NX*NY] * yv[i+j*NX + k*NX*NY]) 
+						+ (zv[i+j*NX + k*NX*NY] * zv[i+j*NX + k*NX*NY]));
+				}
+				else
+				{
+					U[i+j*NX + k*NX*NY +4*N] = 0;
+				}
+			}
+		}
+	}
+				
 }
 void CPUHeatContactFunction(){
 	int i, j, k, z;
         for (k = 0; k < NZ; k++) {
 		for (j = 0; j < NY; j++) {
-			for (i = 0; i < NX; i++) {	
-			E[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY];
-			E[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX]*xv[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY] + press[i+j*NX + k*NX*NY];
-			E[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY];
-                        E[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
-			E[i+j*NX + k*NX*NY +4*N] = xv[i+j*NX + k*NX*NY] * (U[i+j*NX + k*NX*NY +4*N] + press[i+j*NX + k*NX*NY]);
+			for (i = 0; i < NX; i++) {
+				if(!h_body[i + j*NX + k*NX*NY])
+				{
+					E[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY];
+					E[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX]*xv[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY] + press[i+j*NX + k*NX*NY];
+					E[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY];
+                        		E[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
+					E[i+j*NX + k*NX*NY +4*N] = xv[i+j*NX + k*NX*NY] * (U[i+j*NX + k*NX*NY +4*N] + press[i+j*NX + k*NX*NY]);
 			
-			F[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY];
-			F[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY];
-			F[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY]*yv[i + j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY] + press[i+j*NX + k*NX*NY];
-                        F[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
-			F[i+j*NX + k*NX*NY +4*N] = yv[i+j*NX + k*NX*NY] * (U[i+j*NX + k*NX*NY +4*N] + press[i+j*NX + k*NX*NY] );
+					F[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY];
+					F[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY];
+					F[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY]*yv[i + j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY] + press[i+j*NX + k*NX*NY];
+                        		F[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
+					F[i+j*NX + k*NX*NY +4*N] = yv[i+j*NX + k*NX*NY] * (U[i+j*NX + k*NX*NY +4*N] + press[i+j*NX + k*NX*NY] );
 
-                        W[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
-                        W[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
-                        W[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
-                        W[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY]*zv[i + j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY] + press[i+j*NX + k*NX*NY];
-                        W[i+j*NX + k*NX*NY +4*N] = zv[i+j*NX + k*NX*NY] * (U[i+j*NX + k*NX*NY +4*N] + press[i+j*NX + k*NX*NY] );
-
+                        		W[i+j*NX + k*NX*NY +0*N] = dens[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
+                        		W[i+j*NX + k*NX*NY +1*N] = dens[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
+                        		W[i+j*NX + k*NX*NY +2*N] = dens[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY];
+                        		W[i+j*NX + k*NX*NY +3*N] = dens[i+j*NX + k*NX*NY]*zv[i + j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY] + press[i+j*NX + k*NX*NY];
+                        		W[i+j*NX + k*NX*NY +4*N] = zv[i+j*NX + k*NX*NY] * (U[i+j*NX + k*NX*NY +4*N] + press[i+j*NX + k*NX*NY] );
+				}
 			}
 		}
 	}
-	// Rusanov flux:Left, Right, Up, Down
+	// Rusanov flux:Left, Right, Back, Front, Up, Down
 	#pragma omp for collapse(2)// private(speed)
 	
         for (k = 1; k < (NZ - 1); k++) {
@@ -222,19 +223,20 @@ void CPUHeatContactFunction(){
 			for (i = 1; i < (NX - 1); i++) {		
 				speed = sqrt(GAMA*press[i+j*NX + k*NX*NY]/dens[i+j*NX + k*NX*NY]);		// speed of sound in air
 				for(z = 0; z < 5; z++){
-		FL[i+j*NX + k*NX*NY +z*N] = 0.5*(E[i + j*NX + k*NX*NY + z*N] + E[(i-1) + j*NX + k*NX*NY + z*N]) 
+					if(!h_body[i + j*NX + k*NX*NY])
+					{
+					FL[i+j*NX + k*NX*NY +z*N] = 0.5*(E[i + j*NX + k*NX*NY + z*N] + E[(i-1) + j*NX + k*NX*NY + z*N]) 
 							- speed*(U[i + j*NX + k*NX*NY + z*N] - U[(i-1) + j*NX + k*NX*NY + z*N]);
-		FR[i+j*NX + k*NX*NY +z*N] = 0.5*(E[i + j*NX + k*NX*NY + z*N] + E[(i+1) + j*NX + k*NX*NY + z*N]) 
+					FR[i+j*NX + k*NX*NY +z*N] = 0.5*(E[i + j*NX + k*NX*NY + z*N] + E[(i+1) + j*NX + k*NX*NY + z*N]) 
 							- speed*(U[(i + 1) + j*NX + k*NX*NY + z*N] - U[i + j*NX + k*NX*NY + z*N]);
 
-		FB[i+j*NX + k*NX*NY +z*N] = 0.5*(F[i + (j-1)*NX + k*NX*NY + z*N] + F[i + j*NX + k*NX*NY + z*N])
+					FB[i+j*NX + k*NX*NY +z*N] = 0.5*(F[i + (j-1)*NX + k*NX*NY + z*N] + F[i + j*NX + k*NX*NY + z*N])
 							- speed*(U[i + j*NX + k*NX*NY + z*N] - U[i + (j-1)*NX + k*NX*NY + z*N]);
-		FF[i+j*NX + k*NX*NY +z*N] = 0.5*(F[i + j*NX + k*NX*NY + z*N] + F[i + (j+1)*NX + k*NX*NY + z*N])
+					FF[i+j*NX + k*NX*NY +z*N] = 0.5*(F[i + j*NX + k*NX*NY + z*N] + F[i + (j+1)*NX + k*NX*NY + z*N])
 							- speed*(U[i + (j+1)*NX + k*NX*NY + z*N] - U[i + j*NX + k*NX*NY + z*N]);
-
-                FD[i+j*NX + k*NX*NY +z*N] = 0.5*(W[i + j*NX + k*NX*NY + z*N] + W[i + j*NX + (k-1)*NX*NY + z*N])
+        			        FD[i+j*NX + k*NX*NY +z*N] = 0.5*(W[i + j*NX + k*NX*NY + z*N] + W[i + j*NX + (k-1)*NX*NY + z*N])
 							- speed*(U[i + j*NX + k*NX*NY + z*N] - U[i + j*NX + (k-1)*NX*NY + z*N]);
-                FU[i+j*NX + k*NX*NY +z*N] = 0.5*(W[i + j*NX + k*NX*NY + z*N] + W[i + j*NX + (k+1)*NX*NY + z*N])
+        			        FU[i+j*NX + k*NX*NY +z*N] = 0.5*(W[i + j*NX + k*NX*NY + z*N] + W[i + j*NX + (k+1)*NX*NY + z*N])
 							- speed*(U[i + j*NX + (k+1)*NX*NY + z*N] - U[i + j*NX + k*NX*NY + z*N]);
 				}
 			}
@@ -251,9 +253,12 @@ void CalRenewResult(){
 		for (j = 1; j < (NY - 1); j++) {
 			for (i = 1; i < (NX - 1); i++) {
                         	for (z = 0; z < 5; z++) {
-			U_new[i+j*NX + k*NX*NY +z*N] = U[i+j*NX + k*NX*NY +z*N] - (dt/dx)*(FR[i+j*NX + k*NX*NY +z*N] - FL[i+j*NX + k*NX*NY +z*N])
-				- (dt/dy)*(FF[i+j*NX + k*NX*NY +z*N] - FB[i+j*NX + k*NX*NY +z*N]) 
-				- (dt/dz)*(FU[i+j*NX + k*NX*NY +z*N] - FD[i+j*NX + k*NX*NY +z*N]);
+					if(!h_body[i + j*NX + k*NX*NY])
+					{
+					U_new[i+j*NX + k*NX*NY +z*N] = U[i+j*NX + k*NX*NY +z*N] - (dt/dx)*(FR[i+j*NX + k*NX*NY +z*N] - FL[i+j*NX + k*NX*NY +z*N])
+					- (dt/dy)*(FF[i+j*NX + k*NX*NY +z*N] - FB[i+j*NX + k*NX*NY +z*N]) 
+					- (dt/dz)*(FU[i+j*NX + k*NX*NY +z*N] - FD[i+j*NX + k*NX*NY +z*N]);
+					}
 				}
 			}
 		}
@@ -300,16 +305,20 @@ void CalRenewResult(){
         for (k = 0; k < NZ; k++) {
 		for (j = 0; j < NY; j++) {
 			for (i = 0; i < NX; i++) {	
-				dens[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 0*N];
-				xv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 1*N] / U_new[i + j*NX + k*NX*NY + 0*N];
-				yv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 2*N] / U_new[i + j*NX + k*NX*NY + 0*N];
-                                zv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 3*N] / U_new[i + j*NX + k*NX*NY + 0*N];
-				press[i+j*NX + k*NX*NY] = (GAMA-1) * (U_new[i+j*NX + k*NX*NY + 3*N] - 0.5 * dens[i+j*NX + k*NX*NY] * (xv[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY] + yv[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY] +  zv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY]));
-				U[i+j*NX + k*NX*NY + 0*N] = U_new[i+j*NX + k*NX*NY + 0*N];
-				U[i+j*NX + k*NX*NY + 1*N] = U_new[i+j*NX + k*NX*NY + 1*N];
-				U[i+j*NX + k*NX*NY + 2*N] = U_new[i+j*NX + k*NX*NY + 2*N];
-				U[i+j*NX + k*NX*NY + 3*N] = U_new[i+j*NX + k*NX*NY + 3*N];
-				U[i+j*NX + k*NX*NY + 4*N] = U_new[i+j*NX + k*NX*NY + 4*N];
+					if(!h_body[i + j*NX + k*NX*NY])
+					{
+						dens[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 0*N];
+						xv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 1*N] / U_new[i + j*NX + k*NX*NY + 0*N];
+						yv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 2*N] / U_new[i + j*NX + k*NX*NY + 0*N];
+                        			zv[i + j*NX + k*NX*NY] = U_new[i + j*NX + k*NX*NY + 3*N] / U_new[i + j*NX + k*NX*NY + 0*N];
+						press[i+j*NX + k*NX*NY] = (GAMA-1) * (U_new[i+j*NX + k*NX*NY + 3*N] - 0.5 * dens[i+j*NX + k*NX*NY] * (xv[i+j*NX + k*NX*NY]*xv[i+j*NX + k*NX*NY] + yv[i+j*NX + k*NX*NY]*yv[i+j*NX + k*NX*NY] +  zv[i+j*NX + k*NX*NY]*zv[i+j*NX + k*NX*NY]));
+                        			temprature[i + j*NX + k*NX*NY] = (press[i + j*NX + k*NX*NY + 3*N]*28.8 / dens[i + j*NX + k*NX*NY + 0*N]) - 273;
+						U[i+j*NX + k*NX*NY + 0*N] = U_new[i+j*NX + k*NX*NY + 0*N];
+						U[i+j*NX + k*NX*NY + 1*N] = U_new[i+j*NX + k*NX*NY + 1*N];
+						U[i+j*NX + k*NX*NY + 2*N] = U_new[i+j*NX + k*NX*NY + 2*N];
+						U[i+j*NX + k*NX*NY + 3*N] = U_new[i+j*NX + k*NX*NY + 3*N];
+						U[i+j*NX + k*NX*NY + 4*N] = U_new[i+j*NX + k*NX*NY + 4*N];
+					}
 			}
 		}
 	}
@@ -317,42 +326,17 @@ void CalRenewResult(){
 
 }
 void Call_GPUHeatContactFunction(){
-        int threadsPerBlock = 256;
-        int blocksPerGrid = (N + threadsPerBlock -1) / threadsPerBlock;
-        size_t size = N*sizeof(float);
-        cudaError_t Error;
-        GPUHeatContactFunction<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_body);
-        Error = cudaMemcpy(d_a, d_b, size, cudaMemcpyDeviceToDevice);
-        printf("CUDA error (memcpy d_b -> d_a) = %s\n", cudaGetErrorString(Error));
 }
 __global__ void GPUHeatContactFunction(float *a, float *b, int *body){
 		
 }
 void Call_GPUTimeStepFunction(){
-        int threadsPerBlock = 256;
-        int blocksPerGrid = (N + threadsPerBlock -1) / threadsPerBlock;
-	size_t size = N*sizeof(float);
-	cudaError_t Error;
-        GPUTimeStepFunction<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_body);
-	Error = cudaMemcpy(d_a, d_b, size, cudaMemcpyDeviceToDevice);
-        printf("CUDA error (memcpy d_b -> d_a) = %s\n", cudaGetErrorString(Error));
 }
 __global__ void GPUTimeStepFunction(float *a, float *b, int *body){
 }
 void Send_To_Device(){
-        size_t size = N*sizeof(float);
-        cudaError_t Error;
-        Error = cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
-        printf("CUDA error (memcpy h_a -> d_a) = %s\n", cudaGetErrorString(Error));
-	size = N*sizeof(int);
-	Error = cudaMemcpy(d_body, h_body, size, cudaMemcpyHostToDevice);
-	printf("CUDA error (memcpy h_body -> d_body) = %s\n", cudaGetErrorString(Error));
 }
 void Get_From_Device(){
-        size_t size = N*sizeof(float);
-        cudaError_t Error;
-        Error = cudaMemcpy(h_a, d_a, size, cudaMemcpyDeviceToHost);
-        printf("CUDA error (memcpy d_a -> h_a) = %s\n", cudaGetErrorString(Error));
 }
 void Free_Memory() {
         if (dens) free(dens);
@@ -384,5 +368,12 @@ void Free_Memory() {
         if (d_body) cudaFree(d_body);
 }
 void Save_Data() {
-	
+	int i, j, k;	
+	for (k = 0; k < NZ; k++) {	
+		for (j = 0; j < NY; j++) {
+			for (i = 0; i < NX; i++) {
+			fprintf(OutputResult, "%d %d %d %f\n", i+1, j+1, k+1, dens[i+j*NX]);
+			}
+		}
+	}
 }
