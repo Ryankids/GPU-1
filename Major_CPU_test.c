@@ -358,7 +358,7 @@ void CPUHeatContactFunction() {
 							}
 						}
 					}
-					if (!h_body[(i + 1) + j*NX + k*NX*NY) {
+					else if (!h_body[(i + 1) + j*NX + k*NX*NY) {
 						for (z = 0; z < 5; z++) {
 							if(z == 0 || z == 4){
 							FR[i + j*NX + k*NX*NY + z*N] = E[i + j*NX + k*NX*NY + z*N];
@@ -368,7 +368,7 @@ void CPUHeatContactFunction() {
 							}
 						}
 					}
-					if (!h_body[i + (j - 1)*NX + k*NX*NY]) {
+					else if (!h_body[i + (j - 1)*NX + k*NX*NY]) {
 						for (z = 0; z < 5; z++) {
 							if(z == 0 || z == 4){
 							FB[i + j*NX + k*NX*NY + z*N] = F[i + j*NX + k*NX*NY + z*N];
@@ -378,7 +378,7 @@ void CPUHeatContactFunction() {
 							}
 						}
 					}
-					if (!h_body[i + (j + 1)*NX + k*NX*NY]) {
+					else if (!h_body[i + (j + 1)*NX + k*NX*NY]) {
 						for (z = 0; z < 5; z++) {
 							if(z == 0 || z == 4){
 							FF[i + j*NX + k*NX*NY + z*N] = F[i + j*NX + k*NX*NY + z*N];
@@ -388,7 +388,7 @@ void CPUHeatContactFunction() {
 							}
 						}
 					}
-					if (!h_body[i + j*NX + (k - 1)*NX*NY]) {
+					else if (!h_body[i + j*NX + (k - 1)*NX*NY]) {
 						for (z = 0; z < 5; z++) {
 							if(z == 0 || z == 4){
 							FD[i + j*NX + k*NX*NY + z*N] = G[i + j*NX + k*NX*NY + z*N];
@@ -398,7 +398,7 @@ void CPUHeatContactFunction() {
 							}
 						}
 					}
-					if (!h_body[i + j*NX + (k + 1)*NX*NY]) {
+					else if (!h_body[i + j*NX + (k + 1)*NX*NY]) {
 						for (z = 0; z < 5; z++) {
 							if(z == 0 || z == 4){
 							FU[i + j*NX + k*NX*NY + z*N] = G[i + j*NX + k*NX*NY + z*N];
