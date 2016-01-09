@@ -349,64 +349,46 @@ void CPUHeatContactFunction() {
 					}
 					
 					if (!h_body[(i - 1) + j*NX + k*NX*NY]) {
-						for (z = 0; z < 5; z++) {
-							if(z == 0 || z == 4){
-							FL[i + j*NX + k*NX*NY + z*N] = E[i + j*NX + k*NX*NY + z*N];
-							}
-							else{
-							FL[i + j*NX + k*NX*NY + z*N] = (-2)*speed*U[i + j*NX + k*NX*NY + z*N];
-							}
-						}
+							FL[i + j*NX + k*NX*NY + 0*N] = 0;
+							FL[i + j*NX + k*NX*NY + 1*N] = E[i + j*NX + k*NX*NY + 1*N] + (-2)*speed*U[i + j*NX + k*NX*NY + 1*N]
+							FL[i + j*NX + k*NX*NY + 2*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 2*N];
+							FL[i + j*NX + k*NX*NY + 3*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 3*N];
+							FL[i + j*NX + k*NX*NY + 4*N] = 0;
 					}
-					if (!h_body[(i + 1) + j*NX + k*NX*NY) {
-						for (z = 0; z < 5; z++) {
-							if(z == 0 || z == 4){
-							FR[i + j*NX + k*NX*NY + z*N] = E[i + j*NX + k*NX*NY + z*N];
-							}
-							else{
-							FR[i + j*NX + k*NX*NY + z*N] = (-2)*speed*U[i + j*NX + k*NX*NY + z*N];
-							}
-						}
+					else if (!h_body[(i + 1) + j*NX + k*NX*NY) {
+							FR[i + j*NX + k*NX*NY + 0*N] = 0;
+							FR[i + j*NX + k*NX*NY + 1*N] = E[i + j*NX + k*NX*NY + 1*N] + (-2)*speed*U[i + j*NX + k*NX*NY + 1*N]
+							FR[i + j*NX + k*NX*NY + 2*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 2*N];
+							FR[i + j*NX + k*NX*NY + 3*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 3*N];
+							FR[i + j*NX + k*NX*NY + 4*N] = 0;
 					}
-					if (!h_body[i + (j - 1)*NX + k*NX*NY]) {
-						for (z = 0; z < 5; z++) {
-							if(z == 0 || z == 4){
-							FB[i + j*NX + k*NX*NY + z*N] = F[i + j*NX + k*NX*NY + z*N];
-							}
-							else{
-							FB[i + j*NX + k*NX*NY + z*N] = (-2)*speed*U[i + j*NX + k*NX*NY + z*N];
-							}
-						}
+					else if (!h_body[i + (j - 1)*NX + k*NX*NY]) {
+							FB[i + j*NX + k*NX*NY + 0*N] = 0;
+							FB[i + j*NX + k*NX*NY + 1*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 1*N]
+							FB[i + j*NX + k*NX*NY + 2*N] = E[i + j*NX + k*NX*NY + 2*N] + (-2)*speed*U[i + j*NX + k*NX*NY + 2*N];
+							FB[i + j*NX + k*NX*NY + 3*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 3*N];
+							FB[i + j*NX + k*NX*NY + 4*N] = 0;
 					}
-					if (!h_body[i + (j + 1)*NX + k*NX*NY]) {
-						for (z = 0; z < 5; z++) {
-							if(z == 0 || z == 4){
-							FF[i + j*NX + k*NX*NY + z*N] = F[i + j*NX + k*NX*NY + z*N];
-							}
-							else{
-							FF[i + j*NX + k*NX*NY + z*N] = (-2)*speed*U[i + j*NX + k*NX*NY + z*N];
-							}
-						}
+					else if (!h_body[i + (j + 1)*NX + k*NX*NY]) {
+							FF[i + j*NX + k*NX*NY + 0*N] = 0;
+							FF[i + j*NX + k*NX*NY + 1*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 1*N]
+							FF[i + j*NX + k*NX*NY + 2*N] = E[i + j*NX + k*NX*NY + 2*N] + (-2)*speed*U[i + j*NX + k*NX*NY + 2*N];
+							FF[i + j*NX + k*NX*NY + 3*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 3*N];
+							FF[i + j*NX + k*NX*NY + 4*N] = 0;
 					}
-					if (!h_body[i + j*NX + (k - 1)*NX*NY]) {
-						for (z = 0; z < 5; z++) {
-							if(z == 0 || z == 4){
-							FD[i + j*NX + k*NX*NY + z*N] = G[i + j*NX + k*NX*NY + z*N];
-							}
-							else{
-							FD[i + j*NX + k*NX*NY + z*N] = (-2)*speed*U[i + j*NX + k*NX*NY + z*N];
-							}
-						}
+					else if (!h_body[i + j*NX + (k - 1)*NX*NY]) {
+							FD[i + j*NX + k*NX*NY + 0*N] = 0;
+							FD[i + j*NX + k*NX*NY + 1*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 1*N]
+							FD[i + j*NX + k*NX*NY + 2*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 2*N];
+							FD[i + j*NX + k*NX*NY + 3*N] = E[i + j*NX + k*NX*NY + 3*N] + (-2)*speed*U[i + j*NX + k*NX*NY + 3*N];
+							FD[i + j*NX + k*NX*NY + 4*N] = 0;
 					}
-					if (!h_body[i + j*NX + (k + 1)*NX*NY]) {
-						for (z = 0; z < 5; z++) {
-							if(z == 0 || z == 4){
-							FU[i + j*NX + k*NX*NY + z*N] = G[i + j*NX + k*NX*NY + z*N];
-							}
-							else{
-							FU[i + j*NX + k*NX*NY + z*N] = (-2)*speed*U[i + j*NX + k*NX*NY + z*N];
-							}
-						}
+					else if (!h_body[i + j*NX + (k + 1)*NX*NY]) {
+							FU[i + j*NX + k*NX*NY + 0*N] = 0;
+							FU[i + j*NX + k*NX*NY + 1*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 1*N]
+							FU[i + j*NX + k*NX*NY + 2*N] = (-2)*speed*U[i + j*NX + k*NX*NY + 2*N];
+							FU[i + j*NX + k*NX*NY + 3*N] = E[i + j*NX + k*NX*NY + 3*N] + (-2)*speed*U[i + j*NX + k*NX*NY + 3*N];
+							FU[i + j*NX + k*NX*NY + 4*N] = 0;
 					}
 				}
 			}
