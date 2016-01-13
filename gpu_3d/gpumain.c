@@ -1,4 +1,22 @@
 #include "gpumain.h"
+
+#define NX 100                          // No. of cells in x direction
+#define NY 100                          // No. of cells in y direction
+#define NZ 100                          // No. of cells in z direction
+#define N NX*NY*NZ            // N = total number of cells in domain
+#define L 100                             // L = length of domain (m)
+#define H 100                             // H = Height of domain (m)
+#define W 100                             // W = Width of domain (m)
+#define DX L/NX                       // DX, DY, DZ = grid spacing in x,y,z.
+#define DY H/NY
+#define DZ W/NZ
+#define DT 0.00001                       // Time step (seconds)
+
+#define R 287.0           // Gas Constant -> unit: J/(kg*K)
+#define GAMA 7.0/5.0    // Ratio of specific heats
+#define CV R/(GAMA-1.0) // Cv
+#define CP CV + R       // Cp
+
 float *dens;          // host density
 float *xv;            // host velocity in x
 float *yv;            // host velocity in y
@@ -30,12 +48,12 @@ float *d_FU;
 float *h_body;
 float *d_body;
 
-__global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, float* zv, float* press,
-	float* E, float* F, float* G,
-	float* FL, float* FR, float* FB, float* FF, float* FD, float* FU,
-	float* U, float* U_new);
+__global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, float* zv, float* press,float* E, float* F, float* G,float* U);
+__global__ void CalculateFlux2(float* d_body, float* dens, float* xv, float* yv, float* zv,float* press,float* E, float* F, float* G,
+		float* FL, float* FR, float* FB, float* FF, float* FD, float* FU,float* U);
+__global__ void CalculateFlux3(float* d_body, float* dens, float* xv, float* yv, float* zv,float* press,float* U, float* U_new);
 
-void Load_Dat_To_Array(char* input_file_name, float* body) {
+void Load_Dat_To_Array(char* input_file_name) {
 	FILE *pFile;
 	pFile = fopen(input_file_name, "r");
 	if (!pFile) { printf("Open failure"); }
@@ -56,7 +74,7 @@ void Load_Dat_To_Array(char* input_file_name, float* body) {
 		for (z = 25; z < 75; z++) {
 			for (y = 25; y < 75; y++) {
 				idx = z * NX * NY + y * NX + x;
-				fscanf(pFile, "%f%f%f%f", &tmp1, &tmp2, &tmp3, &body[idx]);
+				fscanf(pFile, "%f%f%f%f", &tmp1, &tmp2, &tmp3, &h_body[idx]);
 				/* test... 0.040018	 -0.204846	 -0.286759	 -1 */
 				//if(body[idx] == 0.0) { 
 				//	printf("%d, %f\n", idx, body[idx]);
@@ -111,9 +129,10 @@ void Allocate_Memory() {
 	zv = (float*)malloc(size);
 	press = (float*)malloc(size);
 	temperature = (float*)malloc(size);
-
-	U = (float*)malloc(5 * size);
 	h_body = (float*)malloc(size);
+
+        size_t size2 = 5*N*sizeof(float);
+        U = (float*)malloc(size2);
 
 	Error = cudaMalloc((void**)&d_body, size);
 	printf("CUDA error (malloc d_body) = %s\n", cudaGetErrorString(Error));
@@ -127,27 +146,27 @@ void Allocate_Memory() {
 	printf("CUDA error (malloc d_zv) = %s\n", cudaGetErrorString(Error));
 	Error = cudaMalloc((void**)&d_press, size);
 	printf("CUDA error (malloc d_press) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_U, 5 * size);
+	Error = cudaMalloc((void**)&d_U, size2);
 	printf("CUDA error (malloc d_U) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_U_new, 5 * size);
+	Error = cudaMalloc((void**)&d_U_new, size2);
 	printf("CUDA error (malloc d_U_new) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_E, 5 * size);
+	Error = cudaMalloc((void**)&d_E, size2);
 	printf("CUDA error (malloc d_E) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_F, 5 * size);
+	Error = cudaMalloc((void**)&d_F, size2);
 	printf("CUDA error (malloc d_F) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_G, 5 * size);
+	Error = cudaMalloc((void**)&d_G, size2);
 	printf("CUDA error (malloc d_G) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_FR, 5 * size);
+	Error = cudaMalloc((void**)&d_FR, size2);
 	printf("CUDA error (malloc d_FR) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_FL, 5 * size);
+	Error = cudaMalloc((void**)&d_FL, size2);
 	printf("CUDA error (malloc d_FL) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_FU, 5 * size);
+	Error = cudaMalloc((void**)&d_FU, size2);
 	printf("CUDA error (malloc d_FU) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_FD, 5 * size);
+	Error = cudaMalloc((void**)&d_FD, size2);
 	printf("CUDA error (malloc d_FD) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_FF, 5 * size);
+	Error = cudaMalloc((void**)&d_FF, size2);
 	printf("CUDA error (malloc d_FF) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMalloc((void**)&d_FB, 5 * size);
+	Error = cudaMalloc((void**)&d_FB, size2);
 	printf("CUDA error (malloc d_FB) = %s\n", cudaGetErrorString(Error));
 }
 
@@ -158,6 +177,8 @@ void Free_Memory() {
 	if (zv) free(zv);
 	if (press) free(press);
 	if (temperature) free(temperature);
+	if (U) free(U);
+	if (h_body) free(h_body);
 	if (d_dens) cudaFree(d_dens);
 	if (d_xv) cudaFree(d_xv);
 	if (d_yv) cudaFree(d_yv);
@@ -173,6 +194,7 @@ void Free_Memory() {
 	if (d_FD) cudaFree(d_FD);
 	if (d_FB) cudaFree(d_FB);
 	if (d_FF) cudaFree(d_FF);
+	if (d_body) cudaFree(d_body);
 
 }
 
@@ -191,7 +213,9 @@ void Send_To_Device() {
 	printf("CUDA error (memcpy zv -> d_zv) = %s\n", cudaGetErrorString(Error));
 	Error = cudaMemcpy(d_press, press, size, cudaMemcpyHostToDevice);
 	printf("CUDA error (memcpy press -> d_press) = %s\n", cudaGetErrorString(Error));
-	Error = cudaMemcpy(d_U, U, 5 * size, cudaMemcpyHostToDevice);
+
+        size_t size2 = 5*N*sizeof(float);
+	Error = cudaMemcpy(d_U, U, size2, cudaMemcpyHostToDevice);
 	printf("CUDA error (memcpy U -> d_U) = %s\n", cudaGetErrorString(Error));
 
 }
@@ -211,46 +235,47 @@ void Get_From_Device() {
 	printf("CUDA error (memcpy d_press -> press) = %s\n", cudaGetErrorString(Error));
 }
 
-__global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, float* zv, float* press,
-	float* E, float* F, float* G,
-	float* FL, float* FR, float* FB, float* FF, float* FD, float* FU,
-	float* U, float* U_new) {
-	float speed;
+__global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, float* zv, float* press,float* E, float* F, float* G,float* U) {
+	
 	int i = blockDim.x*blockIdx.x + threadIdx.x;
 
-	int z_cell = (int)(i/(NX*NY));
-	int y_cell = (int)((i - z_cell*NX*NY)/NX);
-	int x_cell = (int)(i - z_cell*NX*NY - y_cell*NX);
+	if (i < N) {
+		if (d_body[i] == -1.0) { // air
+				E[i + 0 * N] = dens[i] * xv[i];
+				E[i + 1 * N] = dens[i] * xv[i] * xv[i] + press[i];
+				E[i + 2 * N] = dens[i] * xv[i] * yv[i];
+				E[i + 3 * N] = dens[i] * xv[i] * zv[i];
+				E[i + 4 * N] = xv[i] * (U[i + 4 * N] + press[i]);
 
-	if (i < N) {	
-			E[i + 0 * N] = dens[i] * xv[i];
-			E[i + 1 * N] = dens[i] * xv[i] * xv[i] + press[i];
-			E[i + 2 * N] = dens[i] * xv[i] * yv[i];
-			E[i + 3 * N] = dens[i] * xv[i] * zv[i];
-			E[i + 4 * N] = xv[i] * (U[i + 4 * N] + press[i]);
+				F[i + 0 * N] = dens[i] * yv[i];
+				F[i + 1 * N] = dens[i] * xv[i] * yv[i];
+				F[i + 2 * N] = dens[i] * yv[i] * yv[i] + press[i];
+				F[i + 3 * N] = dens[i] * yv[i] * zv[i];
+				F[i + 4 * N] = yv[i] * (U[i + 4 * N] + press[i]);
 
-			F[i + 0 * N] = dens[i] * yv[i];
-			F[i + 1 * N] = dens[i] * xv[i] * yv[i];
-			F[i + 2 * N] = dens[i] * yv[i] * yv[i] + press[i];
-			F[i + 3 * N] = dens[i] * yv[i] * zv[i];
-			F[i + 4 * N] = yv[i] * (U[i + 4 * N] + press[i]);
-
-			G[i + 0 * N] = dens[i] * zv[i];
-			G[i + 1 * N] = dens[i] * xv[i] * zv[i];
-			G[i + 2 * N] = dens[i] * yv[i] * zv[i];
-			G[i + 3 * N] = dens[i] * zv[i] * zv[i] + press[i];
-			G[i + 4 * N] = zv[i] * (U[i + 4 * N] + press[i]);
+				G[i + 0 * N] = dens[i] * zv[i];
+				G[i + 1 * N] = dens[i] * xv[i] * zv[i];
+				G[i + 2 * N] = dens[i] * yv[i] * zv[i];
+				G[i + 3 * N] = dens[i] * zv[i] * zv[i] + press[i];
+				G[i + 4 * N] = zv[i] * (U[i + 4 * N] + press[i]);
+		}
 	}
-	__syncthreads();
+}
+__global__ void CalculateFlux2(float* d_body, float* dens, float* xv, float* yv, float* zv,float* press,float* E, float* F, float* G,
+                float* FL, float* FR, float* FB, float* FF, float* FD, float* FU,float* U){
+        int i = blockDim.x*blockIdx.x + threadIdx.x;
 
-	speed = (float)((DX) / DT / 3.0)*0.5; //sqrt(GAMA*press[i] / dens[i]);		// speed of sound in air
+	float speed;
+	speed = (float)((DX) / DT / 3.0)*0.5; // speed of sound in air
 	if (i < N) {
 		if (d_body[i] == -1.0) { // air
 			// Rusanov flux: Left, Right, Back, Front, Down, Up
-			if (x_cell != 0 && x_cell != (NX - 1) && y_cell != 0 && y_cell != (NY - 1) && z_cell != 0 && z_cell != (NZ - 1)) {
+			if ( (i % NX) != 0 && (i % NX) != (NX - 1)) {
+				if( i % (NX*NY) >= NX && i % (NX*NY) < NX*(NY - 1)){
+					if( i > NX*NY && i < NX*NY*(NZ - 1)){ 
 				// ((i % 100) != 0) && ((i % 100) != 99) && (i % 10000 >= 100) && (i % 10000 <= 9899) && (i >= 10000) && (i <= 989999) 
-				// delete left plane, delete right plane, delete back plane, delete front plane, delete down plane, delete up plane 			
-		
+				// delete left plane, delete right plane, delete back plane, delete front plane, delete down plane, delete up plane 
+
 				FL[i + 0 * N] = 0.5*(E[i + 0 * N] + E[i - 1 + 0 * N]) - speed*(U[i + 0 * N] - U[i - 1 + 0 * N]);
 				FR[i + 0 * N] = 0.5*(E[i + 0 * N] + E[i + 1 + 0 * N]) - speed*(U[i + 1 + 0 * N] - U[i + 0 * N]);
 				FL[i + 1 * N] = 0.5*(E[i + 1 * N] + E[i - 1 + 1 * N]) - speed*(U[i + 1 * N] - U[i - 1 + 1 * N]);
@@ -283,14 +308,7 @@ __global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, 
 				FU[i + 3 * N] = 0.5*(G[i + 3 * N] + G[i + NX*NY + 3 * N]) - speed*(U[i + NX*NY + 3 * N] - U[i + 3 * N]);
 				FD[i + 4 * N] = 0.5*(G[i + 4 * N] + G[i - NX*NY + 4 * N]) - speed*(U[i + 4 * N] - U[i - NX*NY + 4 * N]);
 				FU[i + 4 * N] = 0.5*(G[i + 4 * N] + G[i + NX*NY + 4 * N]) - speed*(U[i + NX*NY + 4 * N] - U[i + 4 * N]);
-			}
-		}
-	}
-	__syncthreads();
-
-	if (i < N) {
-		if (x_cell != 0 && x_cell != (NX - 1) && y_cell != 0 && y_cell != (NY - 1) && z_cell != 0 && z_cell != (NZ - 1)) {
-			if (d_body[i] == -1.0) { // air
+			
 				// revise body condition when it is near air
 				if (d_body[(i - 1)] == 0.0) { // left is body
 					// change sign
@@ -414,16 +432,21 @@ __global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, 
 					FU[i + 2 * N] = 0.5*(G[i + 2 * N] + G[i + (1)*NX*NY + 2 * N]) - speed*(U[i + (1)*NX*NY + 2 * N] - U[i + 2 * N]);
 					FU[i + 3 * N] = 0.5*(G[i + 3 * N] + G[i + (1)*NX*NY + 3 * N]) - speed*(U[i + (1)*NX*NY + 3 * N] - U[i + 3 * N]);
 					FU[i + 4 * N] = 0.5*(G[i + 4 * N] + G[i + (1)*NX*NY + 4 * N]) - speed*(U[i + (1)*NX*NY + 4 * N] - U[i + 4 * N]);
+							}
+						}
+					}
 				}
 			}
 		}
 	}
-	__syncthreads();
+	
 
 	// Update U by U_new using FVM (Rusanov Flux)
 	if (i < N) {
 		if (d_body[i] == -1.0) { // air
-			if (x_cell != 0 && x_cell != (NX - 1) && y_cell != 0 && y_cell != (NY - 1) && z_cell != 0 && z_cell != (NZ - 1)) {
+			if ( i % NX != 0 && i % NX != (NX - 1)) {
+				if( i % (NX*NY) >= NX && i % (NX*NY) < NX*(NY - 1)){
+					if( i > (NX*NY - 1) && i < NX*NY*(NZ - 1)){
 				// ((i % 100) != 0) && ((i % 100) != 99) && (i % 10000 >= 100) && (i % 10000 <= 9899) && (i >= 10000) && (i <= 989999) 
 				// delete left plane, delete right plane, delete back plane, delete front plane, delete down plane, delete up plane 
 				U_new[i + 0 * N] = U[i + 0 * N] - (DT / DX)*(FR[i + 0 * N] - FL[i + 0 * N])
@@ -436,51 +459,133 @@ __global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, 
 					- (DT / DY)*(FF[i + 3 * N] - FB[i + 3 * N]) - (DT / DZ)*(FU[i + 3 * N] - FD[i + 3 * N]);
 				U_new[i + 4 * N] = U[i + 4 * N] - (DT / DX)*(FR[i + 4 * N] - FL[i + 4 * N])
 					- (DT / DY)*(FF[i + 4 * N] - FB[i + 4 * N]) - (DT / DZ)*(FU[i + 4 * N] - FD[i + 4 * N]);
-			}		
+					}		
+				}
+			}
 		}
 	}
-	__syncthreads();
+}
+__global__ void CalculateFlux3(float* d_body, float* dens, float* xv, float* yv, float* zv,float* press,float* U, float* U_new){
 
+        int i = blockDim.x*blockIdx.x + threadIdx.x;
 	if (i < N) {
-		// Renew back boundary condition
-		if (y_cell == 0 && x_cell != 0 && x_cell != (NX - 1) && z_cell != 0 && z_cell != (NZ - 1)) {
-			// U_new[i] of back boundary = U_new[i+NX]
-			U_new[i + 0 * N] = U_new[i + NX + 0 * N];
-			U_new[i + 1 * N] = U_new[i + NX + 1 * N];
-			U_new[i + 2 * N] = U_new[i + NX + 2 * N];
-			U_new[i + 3 * N] = U_new[i + NX + 3 * N];
-			U_new[i + 4 * N] = U_new[i + NX + 4 * N];
+		//Renew down boundary condition
+		if ( i < (NX*NY - 1) && i%NX > 0){
+			if( i%NX < (NX - 1) && i % (NX*NY) > NX){
+				if( i % (NX*NY) < NX*(NY - 1)){
+			// (i <= 9999-1) && (i%100 >= 1) && (i%100 <= 98) && (i%10000 >= 101) && (i%10000 <= 9899)
+			// U_new[i] of down boundary = U_new[i+NX*NY]
+			U_new[i + 0 * N] = U_new[i + NX * NY + 0 * N];
+			U_new[i + 1 * N] = U_new[i + NX * NY + 1 * N];
+			U_new[i + 2 * N] = U_new[i + NX * NY + 2 * N];
+			U_new[i + 3 * N] = U_new[i + NX * NY + 3 * N];
+			U_new[i + 4 * N] = U_new[i + NX * NY + 4 * N];
+				}
+			}
 		}
-		// Renew front boundary condition
-		else if (y_cell == 0 && x_cell != 0 && x_cell != (NX - 1) && z_cell != 0 && z_cell != (NZ - 1)) {
-			// U_new[i] of front boundary = U_new[i-NX]
-			U_new[i + 0 * N] = U[i - NX + 0 * N];
-			U_new[i + 1 * N] = U[i - NX + 1 * N];
-			U_new[i + 2 * N] = U[i - NX + 2 * N];
-			U_new[i + 3 * N] = U[i - NX + 3 * N];
-			U_new[i + 4 * N] = U[i - NX + 4 * N];
+		//Renew up boundary condition
+		else if ( i > (NX*NY*(NZ - 1) - 1) && i%NX > 0 ) {
+			if ( i%NX < (NX - 1) && i % (NX*NY) > NX){
+				if(i % (NX*NY) < NX*(NY - 1)){
+			// (i >= 999900) && (i%100 >= 1) && (i%100 <= 98) && (i%10000 >= 101) && (i%10000 <= 9899)
+			// U_new[i] of up boundary = U_new[i-NX*NY]
+			U_new[i + 0 * N] = U_new[i - NX * NY + 0 * N];
+			U_new[i + 1 * N] = U_new[i - NX * NY + 1 * N];
+			U_new[i + 2 * N] = U_new[i - NX * NY + 2 * N];
+			U_new[i + 3 * N] = U_new[i - NX * NY + 3 * N];
+			U_new[i + 4 * N] = U_new[i - NX * NY + 4 * N];
+				}
+			}
 		}
 	}
-	__syncthreads();
-
 
 	if (i < N) {
 		//Renew left boundary condition
-		if (x_cell == 0 && z_cell != 0 && z_cell != (NZ - 1)) {
+		if ( i%NX == 0 && i % (NX*NY) > (NX - 1)) {
+			if( i % (NX*NY) < NX*(NY - 1)){
 			// (i%100 == 0) && (i%10000 >= 100) && (i%10000 <= 9899)
-			// left plane, delete back plane, delete front plane
 			// U_new[i] of left boundary = U_new[i+1]
 			U_new[i + 0 * N] = U_new[i + 1 + 0 * N];
 			U_new[i + 1 * N] = U_new[i + 1 + 1 * N];
 			U_new[i + 2 * N] = U_new[i + 1 + 2 * N];
 			U_new[i + 3 * N] = U_new[i + 1 + 3 * N];
 			U_new[i + 4 * N] = U_new[i + 1 + 4 * N];
+			}
 		}
 		//Renew right boundary condition
-		else if (x_cell == (NX - 1) && z_cell != 0 && z_cell != (NZ - 1)) {
+		else if ( i%NX == (NX - 1) &&  i % (NX*NY) > (NX - 1)) {
+			if( i % (NX*NY) < NX*(NY - 1)){
 			// (i%100 == 99) && (i%10000 >= 100) && (i%10000 <= 9899)
-			// right plane, delete back plane, delete front plane
 			// U_new[i] of right boundary = U_new[i-1]
+			U_new[i + 0 * N] = U_new[i - 1 + 0 * N];
+			U_new[i + 1 * N] = U_new[i - 1 + 1 * N];
+			U_new[i + 2 * N] = U_new[i - 1 + 2 * N];
+			U_new[i + 3 * N] = U_new[i - 1 + 3 * N];
+			U_new[i + 4 * N] = U_new[i - 1 + 4 * N];
+			}
+		}
+		// Renew back boundary condition
+		else if ( i % (NX*NY) < NX && i%NX > 0) {
+			if(i%NX < (NX - 1)){
+			// (i%10000 <= 99) && (i%100 >= 1) && (i%100 <= 98)
+			// U_new[i] of back boundary = U_new[i+NX]
+			U_new[i + 0 * N] = U_new[i + NX + 0 * N];
+			U_new[i + 1 * N] = U_new[i + NX + 1 * N];
+			U_new[i + 2 * N] = U_new[i + NX + 2 * N];
+			U_new[i + 3 * N] = U_new[i + NX + 3 * N];
+			U_new[i + 4 * N] = U_new[i + NX + 4 * N];
+			}
+		}
+		// Renew front boundary condition
+		else if ( i % (NX*NY) > NX*(NY - 1) - 1 && i%NX > 0) {
+			if(i%NX < (NX - 1)){
+			// (i%10000 >= 9900) && (i%100 >= 1) && (i%100 <= 98)
+			// U_new[i] of front boundary = U_new[i-NX]
+			U_new[i + 0 * N] = U_new[i - NX + 0 * N];
+			U_new[i + 1 * N] = U_new[i - NX + 1 * N];
+			U_new[i + 2 * N] = U_new[i - NX + 2 * N];
+			U_new[i + 3 * N] = U_new[i - NX + 3 * N];
+			U_new[i + 4 * N] = U_new[i - NX + 4 * N];
+			}
+		}
+	}
+
+	if (i < N && i > 1) {
+		// edge
+		// left back 
+		if ((i % (NX*NY) == 0)) {
+			// (i%10000 == 0)
+			// U_new[i] = U_new[i] of right 
+			U_new[i + 0 * N] = U_new[i + 1 + 0 * N];
+			U_new[i + 1 * N] = U_new[i + 1 + 1 * N];
+			U_new[i + 2 * N] = U_new[i + 1 + 2 * N];
+			U_new[i + 3 * N] = U_new[i + 1 + 3 * N];
+			U_new[i + 4 * N] = U_new[i + 1 + 4 * N];
+		}
+		// right back 
+		else if ((i % (NX*NY) == (NX - 1))) {
+			// (i%10000 == 99)
+			// U_new[i] of front boundary = U_new[i-NX]
+			U_new[i + 0 * N] = U_new[i - 1 + 0 * N];
+			U_new[i + 1 * N] = U_new[i - 1 + 1 * N];
+			U_new[i + 2 * N] = U_new[i - 1 + 2 * N];
+			U_new[i + 3 * N] = U_new[i - 1 + 3 * N];
+			U_new[i + 4 * N] = U_new[i - 1 + 4 * N];
+		}
+		// left front 
+		else if ((i % (NX*NY) == (NX*(NY - 1)))) {
+			// (i%10000 == 9900)
+			// U_new[i] of front boundary = U_new[i-NX]
+			U_new[i + 0 * N] = U_new[i + 1 + 0 * N];
+			U_new[i + 1 * N] = U_new[i + 1 + 1 * N];
+			U_new[i + 2 * N] = U_new[i + 1 + 2 * N];
+			U_new[i + 3 * N] = U_new[i + 1 + 3 * N];
+			U_new[i + 4 * N] = U_new[i + 1 + 4 * N];
+		}
+		// right front 
+		else if ((i % (NX*NY) == (NX*NY - 1))) {
+			// (i%10000 == 9999)
+			// U_new[i] of front boundary = U_new[i-NX]
 			U_new[i + 0 * N] = U_new[i - 1 + 0 * N];
 			U_new[i + 1 * N] = U_new[i - 1 + 1 * N];
 			U_new[i + 2 * N] = U_new[i - 1 + 2 * N];
@@ -488,33 +593,6 @@ __global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, 
 			U_new[i + 4 * N] = U_new[i - 1 + 4 * N];
 		}
 	}
-	__syncthreads();
-
-	if (i < N) {
-		//Renew down boundary condition
-		if (z_cell == 0) {
-			// (i <= 9999) && (i%100 >= 1) && (i%100 <= 98) && (i%10000 >= 100) && (i%10000 <= 9899)
-			// down plane, delete left plane, delete right plane, delete back plane, delete front plane
-			// U_new[i] of down boundary = U_new[i+NX*NY]
-			U_new[i + 0 * N] = U_new[i + NX * NY + 0 * N];
-			U_new[i + 1 * N] = U_new[i + NX * NY + 1 * N];
-			U_new[i + 2 * N] = U_new[i + NX * NY + 2 * N];
-			U_new[i + 3 * N] = U_new[i + NX * NY + 3 * N];
-			U_new[i + 4 * N] = U_new[i + NX * NY + 4 * N];
-		}
-		//Renew up boundary condition
-		else if (z_cell == (NZ - 1)) {
-			// (i >= 990000) && (i%100 >= 1) && (i%100 <= 98) && (i%10000 >= 100) && (i%10000 <= 9899)
-			// up plane, delete left plane, delete right plane, delete back plane, delete front plane
-			// U_new[i] of up boundary = U_new[i-NX*NY]
-			U_new[i + 0 * N] = U_new[i - NX * NY + 0 * N];
-			U_new[i + 1 * N] = U_new[i - NX * NY + 1 * N];
-			U_new[i + 2 * N] = U_new[i - NX * NY + 2 * N];
-			U_new[i + 3 * N] = U_new[i - NX * NY + 3 * N];
-			U_new[i + 4 * N] = U_new[i - NX * NY + 4 * N];
-		}
-	}
-	__syncthreads();
 
 	// Update density, velocity, pressure, and U
 	if (i < N) {
@@ -531,14 +609,16 @@ __global__ void CalculateFlux(float* d_body, float* dens, float* xv, float* yv, 
 			U[i + 4 * N] = U_new[i + 4 * N];
 		}
 	}
-	__syncthreads();
 }
 
 void Call_CalculateFlux() {
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+	
+	CalculateFlux << <blocksPerGrid, threadsPerBlock >> >(d_body, d_dens, d_xv, d_yv, d_zv, d_press, d_E, d_F, d_G, d_U);
+        CalculateFlux2 << <blocksPerGrid, threadsPerBlock >> >(d_body, d_dens, d_xv, d_yv, d_zv, d_press, d_E, d_F, d_G,d_FL,d_FR,d_FB,d_FF,d_FD,d_FU, d_U);
+        CalculateFlux3 << <blocksPerGrid, threadsPerBlock >> >(d_body, d_dens, d_xv, d_yv, d_zv, d_press, d_U,d_U_new);
 
-	CalculateFlux << <blocksPerGrid, threadsPerBlock >> >(d_body, d_dens, d_xv, d_yv, d_zv, d_press, d_E, d_F, d_G, d_FL, d_FR, d_FB, d_FF, d_FD, d_FU, d_U, d_U_new);
 }
 
 void Save_Data_To_File(char *output_file_name) {
